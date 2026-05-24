@@ -1,4 +1,4 @@
-# SSL4PolypSeg
+# TriSynNet
 ## Introduction
 This repo holds the official code for "Beyond Decoupled Augmentation: Co-Designing Semantic Frequency and Deformable Mixing for Semi-Supervised Polyp Segmentation."
 
