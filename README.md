@@ -160,15 +160,16 @@ Full defaults live in `trisynnet/config.py` (`TrainingConfig`); the values below
 | Group | Parameter | Default |
 | :-- | :-- | :-- |
 | Data | `img_size` / `val_size` | 256 / 256 |
-| | `batch_train` / `batch_val` | 16 / 8 |
+| | `batch_train` (effective, split 32 labeled + 32 unlabeled) / `batch_val` | 64 / 8 |
 | | `labeled_ratio` | 0.1 |
-| SAFPM | `bank_size`, `feature_dim`, `num_sectors` | 30, 512, 8 |
+| SAFPM | `bank_size`, `feature_dim`, `num_sectors` | 50, 512, 8 |
 | | `base_gamma` → `max_gamma` | 0.05 → 0.20 |
-| | `temperature`, `pyramid_levels` | 0.07, 3 |
+| | `temperature`, `pyramid_levels`, `bank_ema_alpha` | 0.07, 3, 0.99 |
 | D-BioMix | `mix_prob`, `grid_size`, `deform_magnitude` | 0.5, 6, 0.15 |
 | Mean Teacher | `ema_alpha`, `rampup_epochs`, `tau` | 0.99, 20, 0.85 |
 | Optimization | optimizer / scheduler | AdamW / `ReduceLROnPlateau` on `val/Dice` |
-| | `lr`, `weight_decay`, `max_epochs` | 1e-4, 1e-4, 100 |
+| | `lr`, `min_lr`, `weight_decay`, `max_epochs` | 1e-4, 1e-7, 1e-4, 100 |
+| | `precision`, `grad_clip_norm` | `16-mixed` (fp16), 1.0 |
 | | `seed` | 42 |
 
 ## Evaluation protocol
