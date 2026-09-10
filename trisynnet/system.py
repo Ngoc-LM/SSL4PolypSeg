@@ -45,6 +45,7 @@ class PolypSSLSystem(pl.LightningModule):
             max_gamma=config.safpm_max_gamma,
             temperature=config.safpm_temperature,
             pyramid_levels=config.pyramid_levels,
+            bank_ema_alpha=config.bank_ema_alpha,
         ) if config.use_safpm else None
 
         self.d_biomix = D_BioMix(
@@ -176,7 +177,7 @@ class PolypSSLSystem(pl.LightningModule):
             self.student.parameters(), lr=self.config.lr, weight_decay=self.config.weight_decay
         )
         scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
-            optimizer, mode="max", factor=0.5, patience=10
+            optimizer, mode="max", factor=0.5, patience=10, min_lr=self.config.min_lr
         )
         return {
             "optimizer": optimizer,
@@ -208,7 +209,9 @@ class PolypDataModule(pl.LightningDataModule):
 
     def train_dataloader(self):
         from pytorch_lightning.utilities import CombinedLoader
-        return CombinedLoader(self.train_loaders, mode="min_size")
+        # `max_size_cycle`: one epoch is a full pass over the (larger)
+        # unlabeled pool, with the labeled stream cycled to match it.
+        return CombinedLoader(self.train_loaders, mode="max_size_cycle")
 
     def val_dataloader(self):
         return self.val_loader
