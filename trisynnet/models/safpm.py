@@ -16,13 +16,14 @@ import torch.nn.functional as F
 class SAFPM(nn.Module):
     def __init__(
         self,
-        bank_size=30,
+        bank_size=50,
         feature_dim=512,
         num_sectors=8,
         base_gamma=0.05,
         max_gamma=0.20,
         temperature=0.07,
         pyramid_levels=3,
+        bank_ema_alpha=0.99,
         device="cuda",
     ):
         super().__init__()
@@ -42,7 +43,7 @@ class SAFPM(nn.Module):
         self.register_buffer("semantic_bank", torch.zeros(bank_size, feature_dim))
         self.register_buffer("bank_ptr", torch.zeros(1, dtype=torch.long))
         self.bank_full = False
-        self.bank_ema_alpha = 0.9
+        self.bank_ema_alpha = bank_ema_alpha
         self.map_cache = None
 
     def _load_from_state_dict(self, state_dict, prefix, local_metadata, strict,
