@@ -24,6 +24,7 @@ class SAFPM(nn.Module):
         temperature=0.07,
         pyramid_levels=3,
         bank_ema_alpha=0.99,
+        gamma_scale=1.0,
         device="cuda",
     ):
         super().__init__()
@@ -44,6 +45,8 @@ class SAFPM(nn.Module):
         self.register_buffer("bank_ptr", torch.zeros(1, dtype=torch.long))
         self.bank_full = False
         self.bank_ema_alpha = bank_ema_alpha
+        # gamma_c = base_gamma + (max_gamma - base_gamma) * tanh(gamma_scale * d_c)
+        self.gamma_scale = gamma_scale
         self.map_cache = None
 
     def _load_from_state_dict(self, state_dict, prefix, local_metadata, strict,
@@ -222,7 +225,7 @@ class SAFPM(nn.Module):
         P_prior_norm = P_prior_norm[..., :eff_len]
 
         dist = torch.norm(P_u_norm - P_prior_norm, p=2, dim=-1, keepdim=True)
-        adaptive_scale = torch.tanh(dist * 5.0)
+        adaptive_scale = torch.tanh(self.gamma_scale * dist)
         gamma = self.base_gamma + (self.max_gamma - self.base_gamma) * adaptive_scale
 
         P_pert_norm = (1 - gamma) * P_u_norm + gamma * P_prior_norm
