@@ -1,6 +1,6 @@
-"""TriSynergy loss: supervised BCE+Dice plus a curriculum-weighted blend of
-correlation-level consistency (robust to SAFPM style shifts) and edge
-contrastive consistency (robust to D-BioMix geometric shifts)."""
+"""TriSynergy loss: supervised BCE+Dice plus a curriculum-weighted blend of a
+Local Affinity term (designed for the spectral perturbation of SAFPM) and an
+Edge Alignment term (designed for the boundaries produced by D-BioMix)."""
 
 import torch
 import torch.nn as nn
@@ -8,9 +8,9 @@ import torch.nn.functional as F
 
 
 class LocalAffinityLoss(nn.Module):
-    """Correlation-level consistency: enforces that local pixel
-    relationships are preserved even if absolute pixel values change due to
-    style transfer (SAFPM harmonization)."""
+    """Local Affinity term: compares l1 affinities between each pixel and its
+    5x5 neighborhood in the prediction and in the pseudo-label, so that local
+    pixel relationships, rather than absolute values, are matched."""
 
     def __init__(self, kernel_size=5):
         super().__init__()
@@ -35,27 +35,35 @@ class LocalAffinityLoss(nn.Module):
 
 
 class EdgeAlignmentLoss(nn.Module):
-    """Edge-aware consistency: aligns predicted boundary orientation with
-    the teacher's boundary orientation, weighted by a reliability mask, and
-    penalizes spurious gradients away from those boundaries.
+    """Edge-aware consistency: aligns the gradient direction of the student
+    prediction with that of the pseudo-label at boundary pixels, weighted by
+    the reliability mask, and penalizes gradients of the student prediction
+    away from those boundaries.
 
-    Gradients are computed with fixed 3x3 Sobel kernels (registered as
-    non-trainable buffers) rather than simple finite differences, for a
-    smoother, noise-robust gradient estimate.
+    gradient="sobel" (default) uses 3x3 Sobel kernels S_x, S_y, i.e.
+    G_x = p * S_x and G_y = p * S_y, as in the manuscript.
+    gradient="forward_diff" uses forward finite differences, set to zero at
+    the last column and row.
     """
 
-    def __init__(self):
+    def __init__(self, gradient="sobel"):
         super().__init__()
+        if gradient not in ("sobel", "forward_diff"):
+            raise ValueError(f"Unknown gradient operator: {gradient!r}")
+        self.gradient = gradient
         sobel_x = torch.tensor([[-1., 0., 1.], [-2., 0., 2.], [-1., 0., 1.]])
         sobel_y = torch.tensor([[-1., -2., -1.], [0., 0., 0.], [1., 2., 1.]])
         self.register_buffer("sobel_x", sobel_x.view(1, 1, 3, 3))
         self.register_buffer("sobel_y", sobel_y.view(1, 1, 3, 3))
 
     def _get_gradients(self, x):
-        # x: [B, 1, H, W]. Normalize by the kernel's positive-weight sum (8)
-        # so magnitudes stay roughly comparable to a finite-difference scale.
-        dx = F.conv2d(x, self.sobel_x, padding=1) / 8.0
-        dy = F.conv2d(x, self.sobel_y, padding=1) / 8.0
+        # x: [B, 1, H, W]
+        if self.gradient == "sobel":
+            dx = F.conv2d(x, self.sobel_x, padding=1)
+            dy = F.conv2d(x, self.sobel_y, padding=1)
+            return dx, dy
+        dx = F.pad(x[:, :, :, 1:] - x[:, :, :, :-1], (0, 1, 0, 0))
+        dy = F.pad(x[:, :, 1:, :] - x[:, :, :-1, :], (0, 0, 0, 1))
         return dx, dy
 
     def forward(self, pred, target, reliability_mask=None):
@@ -83,12 +91,15 @@ class EdgeAlignmentLoss(nn.Module):
 
 
 class TriSynergyLoss(nn.Module):
-    def __init__(self, max_epochs=100):
+    """L_TriSynergy = L_base + w_corr(rho) * L_corr + w_edge(rho) * L_edge,
+    with w_corr = 1 - 0.5 * rho and w_edge = 0.1 + 0.9 * rho, rho = epoch / max_epochs."""
+
+    def __init__(self, max_epochs=100, edge_gradient="sobel"):
         super().__init__()
         self.max_epochs = max_epochs
         self.bce = nn.BCEWithLogitsLoss()
         self.affinity_loss = LocalAffinityLoss(kernel_size=5)
-        self.edge_loss = EdgeAlignmentLoss()
+        self.edge_loss = EdgeAlignmentLoss(gradient=edge_gradient)
         self.smooth = 1.0
 
     def _dice_loss(self, pred, target):
