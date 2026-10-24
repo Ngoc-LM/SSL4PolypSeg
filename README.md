@@ -152,8 +152,7 @@ Defaults in `trisynnet/config.py` follow Section 4.2 and the equations of Sectio
 | | `precision` · `grad_clip_norm` · `seed` | `32` · 1.0 · 42 |
 
 > [!NOTE]
-> **Implementation options.** `--edge_gradient forward_diff` replaces the 3×3 Sobel operator of the Edge Alignment term with forward finite differences, and `--gamma_scale` sets the factor inside $\tanh(\cdot)$ of the adaptive blending strength. The checkpoints behind the results reported in the manuscript were trained with `--edge_gradient forward_diff --gamma_scale 5`; use these flags to reproduce that configuration.
-
+> **Implementation options.** `--edge_gradient forward_diff` replaces the 3×3 Sobel operator of the Edge Alignment term with forward finite differences, and `--gamma_scale` sets the factor inside $\tanh(\cdot)$ of the adaptive blending strength.
 ## Evaluation protocol
 
 `trisynnet/metrics.py` reports region-overlap and boundary-specific metrics on binarized predictions (threshold 0.5), at 256×256.
